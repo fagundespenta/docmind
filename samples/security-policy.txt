@@ -1,0 +1,16 @@
+Northwind Labs - Information Security Policy (sample)
+
+1. Passwords and authentication
+All accounts must use a password manager and unique passwords of at least 14 characters. Multi-factor authentication is mandatory for email, source control and the cloud console. Hardware security keys are provided to engineers with production access.
+
+2. Data classification
+Data is classified as Public, Internal, Confidential or Restricted. Customer personal data is always Restricted and may only be stored in approved systems in the EU region. Restricted data must never be pasted into third-party AI tools that are not approved by the security team.
+
+3. Incident reporting
+Suspected security incidents, including phishing emails, must be reported within one hour to security@northwind.example or the #security-incidents channel. Do not try to investigate a suspected breach on your own.
+
+4. Device security
+Laptops must have full-disk encryption enabled, automatic updates turned on and the screen lock set to five minutes or less. Personal devices may access email only through the managed mobile app.
+
+5. Access reviews
+Managers review their team's access to production systems every quarter. Access is removed within 24 hours when someone leaves the company or changes role.
