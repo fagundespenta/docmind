@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: sqlite:////app/data/docmind.db
+      CHROMA_PATH: /app/data/chroma
+      API_KEYS: ${API_KEYS:-dev-key}
+      CORS_ORIGINS: http://localhost:8080
+    volumes:
+      - docmind-data:/app/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Pre-fills the API key field in the UI. Fine for a local demo; leave empty in production.
+        VITE_DEFAULT_API_KEY: ${VITE_DEFAULT_API_KEY:-dev-key}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  docmind-data:
