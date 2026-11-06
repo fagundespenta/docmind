@@ -226,20 +226,19 @@ data: {"conversation_id": 1, "message_id": 2}
 
 MIT. See [LICENSE](LICENSE).
 
-<details>
-<summary>Português</summary>
+---
 
-# DocMind
+## Português
 
 Aplicação de RAG (retrieval-augmented generation) para fazer perguntas sobre os seus próprios documentos, com respostas que citam o trecho e a página de origem.
 
-## Visão geral
+### Visão geral
 
 Os documentos (PDF, DOCX, TXT, Markdown) são enviados para workspaces, divididos em trechos, convertidos em embeddings e armazenados em um banco vetorial. As perguntas são respondidas a partir dos trechos mais relevantes, e cada resposta é transmitida ao navegador com citações numeradas que apontam para o arquivo e a página.
 
 O backend é um serviço FastAPI tipado, com autenticação por API key, rate limiting e uma camada de LLM plugável (OpenAI, Anthropic Claude, Google Gemini). Um modo offline embutido usa um embedder local e um LLM falso extrativo, então o projeto pode ser executado e testado sem nenhuma chave de API.
 
-## Funcionalidades
+### Funcionalidades
 
 - Upload de arquivos PDF, DOCX, TXT e Markdown, com leitura por página.
 - Chunking recursivo com sobreposição (parágrafos, depois linhas, frases e palavras). Os trechos nunca atravessam páginas.
@@ -254,7 +253,7 @@ O backend é um serviço FastAPI tipado, com autenticação por API key, rate li
 - 50 testes pytest, ruff, mypy em modo strict e CI no GitHub Actions.
 - Configuração com Docker Compose para executar a aplicação completa.
 
-## Arquitetura
+### Arquitetura
 
 Os diagramas da seção em inglês mostram os componentes e o fluxo de uma pergunta:
 
@@ -264,11 +263,11 @@ Os diagramas da seção em inglês mostram os componentes e o fluxo de uma pergu
 4. O LLM recebe os trechos numerados, o histórico e a pergunta, e a resposta é transmitida (`event: token`).
 5. A resposta e as fontes são salvas na conversa (`event: done`).
 
-## Tecnologias
+### Tecnologias
 
 Python 3.12, FastAPI, SQLAlchemy 2.0, SQLite, Chroma, SDKs da OpenAI, Anthropic e Gemini, React 18, TypeScript, Vite, nginx, Docker Compose, pytest, ruff, mypy, GitHub Actions.
 
-## Como executar
+### Como executar
 
 Com Docker:
 
@@ -308,7 +307,7 @@ ruff check . && ruff format --check .
 mypy app
 ```
 
-## Configuração
+### Configuração
 
 | `LLM_PROVIDER` | Requer | Modelo padrão |
 | --- | --- | --- |
@@ -319,19 +318,17 @@ mypy app
 
 Os embeddings são configurados separadamente em `EMBEDDING_PROVIDER` (`fake`, `openai` ou `gemini`; a Anthropic não oferece API de embeddings). Cada workspace mantém uma coleção vetorial por modelo de embedding, então a troca de provedor nunca mistura vetores incompatíveis. Após a troca, os documentos precisam ser enviados novamente. Todas as configurações estão listadas em `.env.example`.
 
-## Exemplos de API
+### Exemplos de API
 
 Os exemplos de `curl` da seção em inglês se aplicam da mesma forma: criar workspace, enviar documento, fazer perguntas (JSON ou streaming SSE) e busca semântica sem LLM.
 
-## Decisões de projeto
+### Decisões de projeto
 
 - Cada trecho pertence a uma única página, o que mantém as citações precisas.
 - O embedder por hashing e o LLM falso extrativo deixam os testes rápidos e determinísticos, e permitem executar a demonstração sem chave de API.
 - Banco vetorial, embedder e LLM são protocolos pequenos, e `create_app()` aceita substituições para os testes.
 - Quando a busca não encontra nada relevante, a API responde sem chamar o LLM.
 
-## Licença
+### Licença
 
 MIT. Veja [LICENSE](LICENSE).
-
-</details>
