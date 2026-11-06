@@ -1,49 +1,31 @@
-# DocMind — chat with your documents
+# DocMind
 
-[![CI](https://github.com/fagundespenta/docmind/actions/workflows/ci.yml/badge.svg)](https://github.com/fagundespenta/docmind/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white)
-![Chroma](https://img.shields.io/badge/Chroma-vector%20DB-FF6F61)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green)
+A retrieval-augmented generation (RAG) application for asking questions about your own documents, with answers that cite the source passage and page.
 
-**[English](#english) · [Português](#português)**
+![DocMind chat view](docs/screenshots/chat-light.png)
 
-![DocMind chat with cited sources](docs/screenshots/chat-light.png)
+## Overview
 
----
+Documents (PDF, DOCX, TXT, Markdown) are uploaded into workspaces, split into chunks, embedded and stored in a vector database. Questions are answered from the most relevant passages, and each answer is streamed to the browser with numbered citations that link back to the file and page.
 
-## English
+The backend is a typed FastAPI service with API key authentication, rate limiting and a pluggable LLM layer (OpenAI, Anthropic Claude, Google Gemini). A built-in offline mode uses a local embedder and an extractive fake LLM, so the project can be run and tested without any API key.
 
-DocMind is a retrieval-augmented generation (RAG) app: upload PDFs, Word files or text
-into workspaces, ask questions in plain language, and get answers that **cite the exact
-passage and page** they came from, streamed token by token.
+## Features
 
-It is built like a production service rather than a notebook demo: a typed FastAPI
-backend with API-key auth and rate limiting, a pluggable LLM layer (OpenAI, Anthropic
-Claude, Google Gemini), a persistent vector store, a React UI, a full test suite and CI.
-It also runs **100% offline** with a built-in fake LLM, so anyone can clone it and try it
-without an API key.
+- Upload of PDF, DOCX, TXT and Markdown files, with page-aware parsing.
+- Recursive chunking with overlap (paragraphs, then lines, sentences and words). Chunks never span pages.
+- Embeddings and vector search with Chroma, one collection per workspace and embedding model.
+- Answers with numbered citations (`[1]`, `[2]`) that the UI turns into clickable sources.
+- Streaming over Server-Sent Events: sources first, then tokens, then a final `done` event.
+- Multiple workspaces with separate document collections.
+- Conversation history, so follow-up questions keep earlier context.
+- LLM provider selected through one environment variable: `fake`, `openai`, `anthropic` or `gemini`.
+- API key authentication (`X-API-Key`) and a per-key sliding-window rate limit that returns `429` with `Retry-After`.
+- OpenAPI documentation at `/api/docs`.
+- 50 pytest tests, ruff, strict mypy and GitHub Actions CI.
+- Docker Compose setup for running the full stack.
 
-### Features
-
-- **Upload PDF, DOCX, TXT and Markdown.** Page-aware parsing, so citations point at the right page.
-- **Recursive, overlap-aware chunking.** Splits on paragraphs, then lines, sentences and words.
-- **Embeddings + Chroma vector search**, with one collection per workspace and embedding model.
-- **Cited answers.** The model is instructed to cite `[1]`, `[2]`, and the UI turns each marker into a clickable source.
-- **Streaming over Server-Sent Events**: sources first, then tokens, then `done`.
-- **Multiple workspaces** that keep separate document collections.
-- **Conversation history.** Follow-up questions carry earlier turns as context.
-- **LLM provider abstraction.** Choose `fake`, `openai`, `anthropic` or `gemini` with one env var.
-- **API-key auth** (`X-API-Key`) and a **per-key sliding-window rate limit** that returns `429` with `Retry-After`.
-- **OpenAPI docs** at `/api/docs`, with an Authorize button.
-- **Quality gates.** 50 pytest tests (chunking, parsing, retrieval on both stores, API, SSE), ruff, strict mypy, and GitHub Actions CI.
-- **One-command run** with Docker Compose.
-
-### Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -53,11 +35,11 @@ flowchart LR
 
     subgraph API["FastAPI backend"]
         AUTH["Auth (X-API-Key)<br/>+ rate limiter"]
-        R["Routers<br/>workspaces · documents · chat"]
-        ING["Ingestion<br/>parse → chunk → embed"]
-        RAG["RAG pipeline<br/>retrieve → prompt → stream"]
-        LLM{{"LLM provider<br/>fake · OpenAI · Claude · Gemini"}}
-        EMB{{"Embedder<br/>hashing · OpenAI · Gemini"}}
+        R["Routers<br/>workspaces, documents, chat"]
+        ING["Ingestion<br/>parse, chunk, embed"]
+        RAG["RAG pipeline<br/>retrieve, prompt, stream"]
+        LLM{{"LLM provider<br/>fake, OpenAI, Claude, Gemini"}}
+        EMB{{"Embedder<br/>hashing, OpenAI, Gemini"}}
     end
 
     DB[("SQLite<br/>workspaces, documents,<br/>conversations, messages")]
@@ -72,7 +54,7 @@ flowchart LR
     R --> DB
 ```
 
-How a question is answered:
+Request flow for a question:
 
 ```mermaid
 sequenceDiagram
@@ -90,48 +72,51 @@ sequenceDiagram
         L-->>A: text delta
         A-->>U: event: token
     end
-    A->>A: save answer + sources to the conversation
+    A->>A: save answer and sources to the conversation
     A-->>U: event: done
 ```
 
-**Project layout**
+Project layout:
 
 ```
 backend/
   app/
     main.py            app factory, wiring, health endpoint
-    config.py          typed settings from env (.env)
+    config.py          typed settings from environment (.env)
     db.py              SQLAlchemy 2.0 models
-    security.py        API-key auth + rate limiter
-    ingestion/         parsers (PDF/DOCX/TXT) and chunking
-    embeddings.py      hashing (offline) / OpenAI / Gemini embedders
-    vectorstore.py     Chroma + in-memory stores behind one protocol
-    llm.py             fake / OpenAI / Anthropic / Gemini streaming providers
-    rag.py             ingestion + retrieval + prompt building
-    routers/           workspaces, documents, chat (JSON + SSE)
+    security.py        API key auth and rate limiter
+    ingestion/         parsers (PDF, DOCX, TXT) and chunking
+    embeddings.py      hashing (offline), OpenAI and Gemini embedders
+    vectorstore.py     Chroma and in-memory stores behind one protocol
+    llm.py             fake, OpenAI, Anthropic and Gemini streaming providers
+    rag.py             ingestion, retrieval and prompt building
+    routers/           workspaces, documents, chat (JSON and SSE)
   tests/               pytest suite
-frontend/              React + Vite + TypeScript UI (nginx in Docker)
+frontend/              React + Vite + TypeScript UI (served by nginx in Docker)
 samples/               demo documents
 scripts/seed_demo.py   creates a demo workspace through the API
 ```
 
-### Run it
+## Tech stack
 
-**Option 1: Docker (one command)**
+Python 3.12, FastAPI, SQLAlchemy 2.0, SQLite, Chroma, OpenAI, Anthropic and Gemini SDKs, React 18, TypeScript, Vite, nginx, Docker Compose, pytest, ruff, mypy, GitHub Actions.
+
+## Running locally
+
+With Docker:
 
 ```bash
-cp .env.example .env          # optional: add your LLM keys here
+cp .env.example .env
 docker compose up --build
 ```
 
-Open the UI at http://localhost:8080 and the API docs at http://localhost:8000/api/docs.
-The demo API key is `dev-key`. Then load the sample documents:
+The UI is available at http://localhost:8080 and the API documentation at http://localhost:8000/api/docs. The demo API key is `dev-key`. To load the sample documents:
 
 ```bash
 python scripts/seed_demo.py --url http://localhost:8000 --key dev-key
 ```
 
-**Option 2: local development**
+Without Docker:
 
 ```bash
 # backend (Python 3.12)
@@ -141,36 +126,33 @@ pip install -e ".[dev]"
 cp ../.env.example ../.env
 uvicorn app.main:get_app --factory --reload --port 8000
 
-# frontend (Node 20+), in another terminal
+# frontend (Node 20+), in a second terminal
 cd frontend
 npm install
 npm run dev        # http://localhost:5173, /api is proxied to :8000
 ```
 
-**Quality checks**
+Tests and static checks:
 
 ```bash
 cd backend
-pytest -q          # 50 tests, fully offline
+pytest -q
 ruff check . && ruff format --check .
-mypy app           # strict mode
+mypy app
 ```
 
-### Choosing an LLM
+## Configuration
 
-| `LLM_PROVIDER` | Needs | Default model |
+| `LLM_PROVIDER` | Requires | Default model |
 | --- | --- | --- |
 | `fake` | nothing (offline, deterministic) | extractive answers with citations |
 | `openai` | `OPENAI_API_KEY` | `gpt-5-mini` |
-| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` (effort via `ANTHROPIC_EFFORT`) |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` (effort set by `ANTHROPIC_EFFORT`) |
 | `gemini` | `GEMINI_API_KEY` | `gemini-2.5-flash` |
 
-Embeddings are configured separately with `EMBEDDING_PROVIDER` (`fake`, `openai` or `gemini`;
-Anthropic has no embeddings API). Each workspace keeps one vector collection per embedding
-model, so switching providers never mixes incompatible vectors. Re-upload documents after
-switching.
+Embeddings are configured separately with `EMBEDDING_PROVIDER` (`fake`, `openai` or `gemini`; Anthropic does not offer an embeddings API). Each workspace keeps one vector collection per embedding model, so changing providers never mixes incompatible vectors. Documents need to be uploaded again after a change. All settings are listed in `.env.example`.
 
-### API examples
+## API examples
 
 ```bash
 KEY=dev-key
@@ -184,7 +166,7 @@ curl -s -X POST $API/workspaces -H "X-API-Key: $KEY" \
 curl -s -X POST $API/workspaces/1/documents -H "X-API-Key: $KEY" \
      -F "file=@samples/employee-handbook.md"
 
-# Ask (full JSON answer with sources)
+# Ask a question (JSON response with sources)
 curl -s -X POST $API/workspaces/1/ask -H "X-API-Key: $KEY" \
      -H "Content-Type: application/json" \
      -d '{"question": "How many vacation days do employees get?"}'
@@ -194,7 +176,7 @@ curl -N -X POST $API/workspaces/1/ask/stream -H "X-API-Key: $KEY" \
      -H "Content-Type: application/json" \
      -d '{"question": "Can I work remotely?", "conversation_id": 1}'
 
-# Semantic search only (no LLM)
+# Semantic search without the LLM
 curl -s "$API/workspaces/1/search?q=phishing&k=3" -H "X-API-Key: $KEY"
 ```
 
@@ -225,86 +207,83 @@ event: done
 data: {"conversation_id": 1, "message_id": 2}
 ```
 
-### Screenshots
+## Design notes
 
-| Light | Dark |
+- Each chunk belongs to exactly one page, which keeps citations precise.
+- The hashing embedder and the extractive fake LLM keep the tests fast and deterministic, and allow the demo to run without an API key.
+- The vector store, embedder and LLM are small protocols, and `create_app()` accepts overrides for testing.
+- When retrieval finds nothing relevant, the API responds without calling the LLM.
+
+## Screenshots
+
+| Light theme | Dark theme |
 | --- | --- |
-| ![light](docs/screenshots/chat-light.png) | ![dark](docs/screenshots/chat-dark.png) |
+| ![Light theme](docs/screenshots/chat-light.png) | ![Dark theme](docs/screenshots/chat-dark.png) |
 
-![OpenAPI docs](docs/screenshots/api-docs.png)
+![OpenAPI documentation](docs/screenshots/api-docs.png)
 
-### Design notes
+## License
 
-- **Chunks never span pages.** Each chunk maps to exactly one page, so citations stay precise.
-- **Offline by default.** The hashing embedder (signed feature hashing over unigrams and bigrams) and the extractive fake LLM keep tests deterministic and fast, and the demo works with no API key.
-- **Swappable components.** The vector store, embedder and LLM are small protocols. `create_app()` accepts overrides, which keeps tests simple.
-- **No silent cost.** If retrieval finds nothing relevant, the API answers directly without calling the LLM.
+MIT. See [LICENSE](LICENSE).
 
-### Roadmap
+<details>
+<summary>Português</summary>
 
-- Background ingestion queue for very large files
-- OCR for scanned PDFs
-- Hybrid search (BM25 + vectors) and re-ranking
-- pgvector backend for Postgres deployments
+# DocMind
 
----
+Aplicação de RAG (retrieval-augmented generation) para fazer perguntas sobre os seus próprios documentos, com respostas que citam o trecho e a página de origem.
 
-## Português
+## Visão geral
 
-O DocMind é uma aplicação de RAG (retrieval-augmented generation). Você envia PDFs,
-arquivos do Word ou textos para workspaces, faz perguntas em linguagem natural e recebe
-respostas que **citam o trecho e a página exatos** de onde vieram, transmitidas palavra por
-palavra.
+Os documentos (PDF, DOCX, TXT, Markdown) são enviados para workspaces, divididos em trechos, convertidos em embeddings e armazenados em um banco vetorial. As perguntas são respondidas a partir dos trechos mais relevantes, e cada resposta é transmitida ao navegador com citações numeradas que apontam para o arquivo e a página.
 
-Foi construído como um serviço de produção, e não como um notebook de demonstração:
-backend FastAPI tipado com autenticação por API key e rate limiting, camada de LLM
-plugável (OpenAI, Anthropic Claude, Google Gemini), banco vetorial persistente, interface
-React, suíte de testes completa e CI. Também roda **100% offline** com um LLM falso
-embutido, então qualquer pessoa pode clonar e testar sem chave de API.
+O backend é um serviço FastAPI tipado, com autenticação por API key, rate limiting e uma camada de LLM plugável (OpenAI, Anthropic Claude, Google Gemini). Um modo offline embutido usa um embedder local e um LLM falso extrativo, então o projeto pode ser executado e testado sem nenhuma chave de API.
 
-### Funcionalidades
+## Funcionalidades
 
-- **Upload de PDF, DOCX, TXT e Markdown**, com leitura por página para as citações apontarem a página certa.
-- **Chunking recursivo com sobreposição.** Divide por parágrafos, depois linhas, frases e palavras.
-- **Embeddings + busca vetorial no Chroma**, com uma coleção por workspace e por modelo de embedding.
-- **Respostas com citações.** O modelo cita `[1]`, `[2]`, e a interface transforma cada marcador em uma fonte clicável.
-- **Streaming via Server-Sent Events**: primeiro as fontes, depois os tokens e por fim `done`.
-- **Vários workspaces**, cada um com seus próprios documentos.
-- **Histórico de conversas.** Perguntas de acompanhamento levam o contexto anterior.
-- **Abstração de provedores de LLM.** Escolha `fake`, `openai`, `anthropic` ou `gemini` com uma variável de ambiente.
-- **Autenticação por API key** (`X-API-Key`) e **rate limit por chave** (janela deslizante, `429` com `Retry-After`).
-- **Documentação OpenAPI** em `/api/docs`, com botão Authorize.
-- **Qualidade.** 50 testes pytest (chunking, parsing, recuperação nos dois bancos, API, SSE), ruff, mypy strict e CI no GitHub Actions.
-- **Execução com um comando** via Docker Compose.
+- Upload de arquivos PDF, DOCX, TXT e Markdown, com leitura por página.
+- Chunking recursivo com sobreposição (parágrafos, depois linhas, frases e palavras). Os trechos nunca atravessam páginas.
+- Embeddings e busca vetorial com Chroma, com uma coleção por workspace e por modelo de embedding.
+- Respostas com citações numeradas (`[1]`, `[2]`) que a interface transforma em fontes clicáveis.
+- Streaming via Server-Sent Events: primeiro as fontes, depois os tokens e por fim o evento `done`.
+- Vários workspaces, cada um com seus próprios documentos.
+- Histórico de conversas, para que perguntas de acompanhamento mantenham o contexto anterior.
+- Provedor de LLM escolhido por uma variável de ambiente: `fake`, `openai`, `anthropic` ou `gemini`.
+- Autenticação por API key (`X-API-Key`) e rate limit por chave com janela deslizante, que retorna `429` com `Retry-After`.
+- Documentação OpenAPI em `/api/docs`.
+- 50 testes pytest, ruff, mypy em modo strict e CI no GitHub Actions.
+- Configuração com Docker Compose para executar a aplicação completa.
 
-### Arquitetura
+## Arquitetura
 
-Os diagramas Mermaid da seção em inglês mostram os componentes e o fluxo de uma
-pergunta. Resumo do fluxo:
+Os diagramas da seção em inglês mostram os componentes e o fluxo de uma pergunta:
 
 1. A interface envia a pergunta para `POST /api/workspaces/{id}/ask/stream`.
-2. A API gera o embedding da pergunta e busca os trechos mais parecidos no Chroma, só dentro daquele workspace.
+2. A API gera o embedding da pergunta e busca os trechos mais parecidos no Chroma, apenas dentro daquele workspace.
 3. As fontes são enviadas primeiro (`event: sources`).
 4. O LLM recebe os trechos numerados, o histórico e a pergunta, e a resposta é transmitida (`event: token`).
 5. A resposta e as fontes são salvas na conversa (`event: done`).
 
-### Como rodar
+## Tecnologias
 
-**Opção 1: Docker (um comando)**
+Python 3.12, FastAPI, SQLAlchemy 2.0, SQLite, Chroma, SDKs da OpenAI, Anthropic e Gemini, React 18, TypeScript, Vite, nginx, Docker Compose, pytest, ruff, mypy, GitHub Actions.
+
+## Como executar
+
+Com Docker:
 
 ```bash
-cp .env.example .env          # opcional: coloque aqui suas chaves de LLM
+cp .env.example .env
 docker compose up --build
 ```
 
-A interface fica em http://localhost:8080 e a documentação da API em http://localhost:8000/api/docs.
-A chave de demonstração é `dev-key`. Para carregar os documentos de exemplo:
+A interface fica em http://localhost:8080 e a documentação da API em http://localhost:8000/api/docs. A chave de demonstração é `dev-key`. Para carregar os documentos de exemplo:
 
 ```bash
 python scripts/seed_demo.py --url http://localhost:8000 --key dev-key
 ```
 
-**Opção 2: desenvolvimento local**
+Sem Docker:
 
 ```bash
 # backend (Python 3.12)
@@ -317,44 +296,42 @@ uvicorn app.main:get_app --factory --reload --port 8000
 # frontend (Node 20+), em outro terminal
 cd frontend
 npm install
-npm run dev        # http://localhost:5173, /api é redirecionado para :8000
+npm run dev        # http://localhost:5173, /api é encaminhado para :8000
 ```
 
-**Testes e qualidade**
+Testes e verificações estáticas:
 
 ```bash
 cd backend
-pytest -q          # 50 testes, totalmente offline
+pytest -q
 ruff check . && ruff format --check .
-mypy app           # modo strict
+mypy app
 ```
 
-### Escolhendo o LLM
+## Configuração
 
-| `LLM_PROVIDER` | Precisa de | Modelo padrão |
+| `LLM_PROVIDER` | Requer | Modelo padrão |
 | --- | --- | --- |
 | `fake` | nada (offline, determinístico) | respostas extrativas com citações |
 | `openai` | `OPENAI_API_KEY` | `gpt-5-mini` |
-| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` (esforço via `ANTHROPIC_EFFORT`) |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` (esforço definido por `ANTHROPIC_EFFORT`) |
 | `gemini` | `GEMINI_API_KEY` | `gemini-2.5-flash` |
 
-Os embeddings são configurados à parte em `EMBEDDING_PROVIDER` (`fake`, `openai` ou `gemini`;
-a Anthropic não tem API de embeddings). Cada workspace mantém uma coleção vetorial por
-modelo de embedding, então trocar de provedor nunca mistura vetores incompatíveis. Depois
-de trocar, envie os documentos de novo.
+Os embeddings são configurados separadamente em `EMBEDDING_PROVIDER` (`fake`, `openai` ou `gemini`; a Anthropic não oferece API de embeddings). Cada workspace mantém uma coleção vetorial por modelo de embedding, então a troca de provedor nunca mistura vetores incompatíveis. Após a troca, os documentos precisam ser enviados novamente. Todas as configurações estão listadas em `.env.example`.
 
-### Exemplos de API
+## Exemplos de API
 
-Os exemplos de `curl` da seção em inglês valem igualmente: criar workspace, enviar
-documento, perguntar (JSON ou streaming SSE) e busca semântica sem LLM.
+Os exemplos de `curl` da seção em inglês se aplicam da mesma forma: criar workspace, enviar documento, fazer perguntas (JSON ou streaming SSE) e busca semântica sem LLM.
 
-### Decisões de projeto
+## Decisões de projeto
 
-- **Chunks nunca atravessam páginas.** Cada chunk pertence a uma única página, então as citações ficam precisas.
-- **Offline por padrão.** O embedder por hashing e o LLM falso extrativo deixam os testes rápidos e determinísticos, e a demonstração funciona sem chave de API.
-- **Componentes trocáveis.** Banco vetorial, embedder e LLM são protocolos pequenos, e `create_app()` aceita substituições, o que simplifica os testes.
-- **Sem custo escondido.** Se a busca não encontra nada relevante, a API responde direto, sem chamar o LLM.
+- Cada trecho pertence a uma única página, o que mantém as citações precisas.
+- O embedder por hashing e o LLM falso extrativo deixam os testes rápidos e determinísticos, e permitem executar a demonstração sem chave de API.
+- Banco vetorial, embedder e LLM são protocolos pequenos, e `create_app()` aceita substituições para os testes.
+- Quando a busca não encontra nada relevante, a API responde sem chamar o LLM.
 
----
+## Licença
 
-Built by **Pedro Henrique Siqueira Fagundes** · MIT License
+MIT. Veja [LICENSE](LICENSE).
+
+</details>
